@@ -14,10 +14,10 @@ function imageToJSON(path) {
 			for (let x = 0; x < width; x++) {
 				const rgba = jimp.intToRGBA(image.getPixelColor(x, y));
 				// ignore transparent pixels
-				if (rgba.a === 0 || (rgba.r === 255 && rgba.g === 255 && rgba.b === 255)) continue;
+				if (rgba.a === 0 || (rgba.b === 255, rgba.g === 255, rgba.r === 255)) continue;
 				const pixel = {
-					width: x,
-					height: y,
+					x,
+					y,
 					data: [rgba.r, rgba.g, rgba.b, rgba.a],
 				};
 				pixels.push(pixel);
@@ -42,4 +42,4 @@ function imageToJSON(path) {
 	});
 }
 
-imageToJSON('loup-id_3 (1).png');
+imageToJSON('picture copy.jpg');

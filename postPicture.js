@@ -2,8 +2,16 @@ const axios = require('axios');
 const fs = require('fs');
 const { setTimeout } = require('timers/promises');
 
+let development = false;
+
+let url = !development ? 'http://api.pixels.codam.nl/canvas/single' : 'http://localhost:3000/canvas/single';
+const headers = { 'x-real-ip': 'joe mama' };
+
+let timeout = 0;
+
 async function postJSONToServer() {
 	// Read the contents of the file into a string
+	console.log(url);
 	const jsonStr = await fs.promises.readFile('picture.json', 'utf8');
 
 	// Parse the JSON string into an array of objects
@@ -13,11 +21,11 @@ async function postJSONToServer() {
 	// randomize the order of the objects
 	const randomizedArr = jsonArr[0].sort(() => Math.random() - 0.5);
 
-	for (let i = 0; i < randomizedArr.length; i += 200) {
-		const data = randomizedArr.slice(i, i + 200);
+	for (let i = 0; i < randomizedArr.length; i += 400) {
+		const data = randomizedArr.slice(i, i + 400);
 		for (let j = 0; j < data.length; j++) {
-			await axios.post('http://api.pixels.codam.nl/canvas/single', data[j])
-				.catch(err => { console.error(err), setTimeout(4000), j--; });
+			await axios.post(url, data[j], { headers })
+				.catch(err => { console.error("Server wants me to wait.. cringe.. Waiting: " + err.response.data.error + "ms"), timeout = err.response.data.error, j--; });
 			// console.log(` (${Math.floor(((j + i + 1) / randomizedArr.length) * 100)}%)`);
 			// print progress bar
 			const progress = Math.floor(((j + i + 1) / randomizedArr.length) * 100);
@@ -27,9 +35,10 @@ async function postJSONToServer() {
 			const progressStrDiff = ' '.repeat(progressStrLengthDiff);
 			const progressStrFinal = progressStr + progressStrDiff;
 			process.stdout.write(progressStrFinal + '\r');
-			await setTimeout(20);
+			await setTimeout(timeout);
+			timeout += 1;
 		}
-		await setTimeout(1500);
+		// await setTimeout(1500);
 	}
 	// for (let i = 0; i < jsonArr[0].length; i += 200) {
 	// 	const data = jsonArr[0].slice(i, i + 200);
