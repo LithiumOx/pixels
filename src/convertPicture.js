@@ -26,11 +26,9 @@ export function imageToJSON(path, targetWidth, targetHeight) {
 				for (let x = 0; x < width; x++) {
 					const rgba = jimp.intToRGBA(image.getPixelColor(x, y));
 					// ignore transparent pixels
-					if (
-						rgba.a === 0 ||
-						(rgba.b === 255, rgba.g === 255, rgba.r === 255)
-					)
+					if (rgba.a === 0) {
 						continue;
+					}
 					const pixel = {
 						x,
 						y,
