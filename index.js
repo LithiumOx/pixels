@@ -1,60 +1,126 @@
-const axios = require('axios');
+import fs from 'fs';
+import readline from 'readline';
+import path from 'path';
+import { imageToJSON } from './src/convertPicture.js';
+import { postJSONToServer } from './src/postPicture.js';
+import chalk from 'chalk';
+import emoji from 'node-emoji';
 
-let w = 0;
-let h = 0;
+const imageDir = './images';
 
-// create a fetch query that posts data to a server with axios
-const fetchQuery = (url, data) => {
+const readdirAsync = (path) => {
 	return new Promise((resolve, reject) => {
-		axios.post(url, data).then(res => {
-			resolve(res.data);
-		}).catch(err => {
-			reject(err);
+		fs.readdir(path, (err, files) => {
+			if (err) {
+				reject(err);
+			} else {
+				resolve(files);
+			}
+		});
+	});
+};
+
+const questionAsync = (rl, question) => {
+	return new Promise((resolve) => {
+		rl.question(question, (answer) => {
+			resolve(answer);
+		});
+	});
+};
+
+const getImageFiles = async () => {
+	try {
+		const files = await readdirAsync(imageDir);
+		return files.filter((file) => {
+			const extension = path.extname(file).toLowerCase();
+			return (
+				extension === '.png' ||
+				extension === '.jpg' ||
+				extension === '.jpeg'
+			);
+		});
+	} catch (err) {
+		console.error(err);
+	}
+};
+
+const rl = readline.createInterface({
+	input: process.stdin,
+	output: process.stdout,
+});
+
+async function waitForInput(rl, imageFiles) {
+	let selectedIndex = 0;
+
+	// Print the list of image files
+	console.log('Select an image:');
+	printImageFiles(imageFiles, selectedIndex);
+
+	rl.input.setRawMode(true);
+	readline.emitKeypressEvents(rl.input);
+
+	return new Promise((resolve) => {
+		rl.input.on('keypress', async (key, info) => {
+			if (info.name === 'up') {
+				selectedIndex = Math.max(selectedIndex - 1, 0);
+			} else if (info.name === 'down') {
+				selectedIndex = Math.min(
+					selectedIndex + 1,
+					imageFiles.length - 1,
+				);
+			} else if (info.name === 'return') {
+				rl.input.removeAllListeners('keypress');
+				rl.input.setRawMode(false); // Disable raw mode before resolving the promise
+				console.log(); // Print a newline after the list of image files
+				resolve(selectedIndex);
+			}
+
+			readline.cursorTo(process.stdout, 0, 0); // Move the cursor to the start of the list
+			readline.clearScreenDown(process.stdout); // Clear the console from the cursor down
+			printImageFiles(imageFiles, selectedIndex); // Print the list of image files with the selected file highlighted
 		});
 	});
 }
 
-const createObj = (width, height, data) => {
-	return {
-		width: width,
-		height: height,
-		data: data,
-	};
+function printImageFiles(imageFiles, selectedIndex) {
+	for (let i = 0; i < imageFiles.length; i++) {
+		if (i === selectedIndex) {
+			console.log(chalk.inverse(` ${i + 1}. ${imageFiles[i]} `));
+		} else {
+			console.log(` ${i + 1}. ${imageFiles[i]}`);
+		}
+	}
 }
 
-// create a fucntion that randomizes the width height and color data randomly [0,0,0,0]
-	function generateColorRGBA() {
-		const color = [];
-		for (let i = 0; i < 4; i++) {
-			color.push(Math.floor(Math.random() * 255));
-		}
-		return color;
+const processImage = async (chosenFile) => {
+	try {
+		console.log(chalk.yellow(`Processing ${chosenFile}...`));
+		await imageToJSON(`images/` + chosenFile, 200, 200);
+
+		console.log(chalk.yellow(`Sending ${chosenFile}...`));
+		await postJSONToServer();
+		console.log(
+			chalk.green(
+				`${emoji.get('white_check_mark')} File sent successfully!`,
+			),
+		);
+	} catch (err) {
+		console.error(chalk.red(`Error: ${err}`));
 	}
 
-	function createPixelData(width, height) {
-		data = generateColorRGBA();
-		const pixelData = createObj(width, height, data);
-		// console.log(pixelData, `${width} | ${height}\n`);
-		fetchQuery('http://api.pixels.codam.nl/canvas/single', pixelData).catch(err => { console.log(err) });
-	}
+	rl.close(); // Move the rl.close() call here
+};
 
-// call the createPixelData function 100 times
+const main = async () => {
+	const imageFiles = await getImageFiles();
 
-function infiniteLoop() {
-	for (let i = 0; i < 200; i++) {
-		if (w == 200 && h == 200) {
-			w = 0;
-			h = 0;
-		} else if (w == 200 && h < 200) {
-			h++;
-			w = 0;
-		} else if (w < 200 && h != 200) {
-			w++;
-		}
-		createPixelData(w, h);
-	}
-	console.log('Sent 250 pixels ✨\n');
-	setTimeout(infiniteLoop, 1000);
-}
+	const selectedIndex = await waitForInput(rl, imageFiles);
 
-infiniteLoop();
+	const chosenFile = imageFiles[selectedIndex];
+
+	await processImage(chosenFile); // Call the processImage() function here
+
+	process.exit(0);
+};
+
+main();
