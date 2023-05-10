@@ -2,17 +2,33 @@ import fs from 'fs';
 import axios from 'axios';
 import cliProgress from 'cli-progress';
 import { setTimeout } from 'timers/promises';
-import { cli } from 'cli-ux';
 
 let development = true;
 
 const URL = !development
-	? 'http://api.pixels.codam.nl/api/batch'
-	: 'http://localhost:5174/api/batch';
+	? 'http://api.pixels.codam.nl/api/single'
+	: 'http://localhost:5173/api/single';
 const HEADERS = { 'x-real-ip': 'joe mama' };
 const SLEEP_DURATION = 1000;
+const MAX_RETRIES = 3;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function sendPixel(pixel) {
+	try {
+		const response = await axios.post(URL, pixel).catch(async (error) => {
+			if (error.response && error.response.status === 429) {
+				await setTimeout(error.response.data.timeToWait);
+				return sendPixel(pixel);
+			} else {
+				throw error;
+			}
+		});
+	} catch (error) {
+		console.error('Error while sending pixel:', error);
+		throw error;
+	}
+}
 
 export async function postJSONToServer() {
 	try {
@@ -36,28 +52,13 @@ export async function postJSONToServer() {
 
 		bar.start(pixels.length, 0);
 
-		// Send pixels one by one as long as the previous one was successful
-		let i = 0;
-		while (i < pixels.length) {
-			try {
-				const pixel = pixels[i];
-				await axios.post(URL, pixel, {
-					headers: HEADERS,
-					timeout: 30000,
-				});
-
-				bar.increment(1);
-				i++;
-			} catch (err) {
-				console.error(`Error sending pixel to server: ${err}`);
-
-				// If there was an error, wait and try again
-				await sleep(SLEEP_DURATION);
-			}
+		for (let i = 0; i < pixels.length; i++) {
+			await sendPixel(pixels[i]);
+			bar.increment(1);
 		}
 
 		bar.stop();
-		cli.action.stop('File sent successfully!');
+		console.log('File sent successfully!');
 	} catch (err) {
 		console.error(`Error reading or parsing JSON file: ${err}`);
 	}
